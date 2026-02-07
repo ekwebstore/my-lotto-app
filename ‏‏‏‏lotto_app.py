@@ -9,28 +9,25 @@ from datetime import datetime
 # 1. הגדרות עמוד
 st.set_page_config(page_title="Lotto AI Gold", page_icon="💰", layout="centered")
 
-# CSS דחוס במיוחד - ללא רווחים מיותרים
+# CSS חזק שמתמקד בטבלה ובמניעת רווחים
 st.markdown("""
     <style>
-    /* ביטול רווחים ש-Streamlit מוסיף אוטומטית */
-    .block-container { padding-top: 2rem; padding-bottom: 1rem; }
-    
     .stButton>button { width: 100%; border-radius: 25px; background-color: #0F9D58; color: white; font-weight: bold; }
     
-    /* מכולת הכדורים - דחיסה מקסימלית */
-    .lotto-wrapper {
-        display: block;
-        unicode-bidi: bidi-override;
-        direction: ltr;
-        text-align: center;
-        width: 100%;
-        line-height: 1;
-        margin: 0;
-        padding: 0;
+    /* עיצוב הטבלה שתחזיק את הכדורים */
+    .lotto-table {
+        margin-left: auto;
+        margin-right: auto;
+        border-collapse: collapse; /* מבטל רווחים בין תאים */
+        table-layout: auto;
+    }
+    
+    .lotto-table td {
+        padding: 2px; /* שליטה מלאה על המרחק בין הכדורים */
     }
 
     .ball-style {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         justify-content: center;
         width: 32px;
@@ -40,9 +37,7 @@ st.markdown("""
         font-weight: bold;
         border: 2px solid #4285F4;
         color: #202124;
-        margin: 2px; /* רווח מזערי בין כדור לכדור */
         font-size: 14px;
-        padding: 0;
     }
     
     .hit { background-color: #34A853 !important; color: white !important; border-color: #188038 !important; }
@@ -59,15 +54,15 @@ def safe_int(val):
     except: return 0
 
 def display_lotto_line(nums, strong, actual_nums=[], actual_strong=-1):
-    # שימוש ב-span צפופים ללא רווחים ביניהם בקוד ה-HTML
-    html = '<div class="lotto-wrapper">'
+    """שימוש בטבלה כדי להכריח את הכדורים לעמוד בשורה אחת צפופה"""
+    html = '<table class="lotto-table"><tr>'
     for n in nums:
         is_hit = "hit" if n in actual_nums else ""
-        html += f'<span class="ball-style {is_hit}">{n}</span>'
+        html += f'<td><div class="ball-style {is_hit}">{n}</div></td>'
     
     is_s_hit = "hit" if strong == actual_strong else ""
-    html += f'<span class="ball-style strong {is_s_hit}">{strong}</span>'
-    html += '</div>'
+    html += f'<td><div class="ball-style strong {is_s_hit}">{strong}</div></td>'
+    html += '</tr></table>'
     st.write(html, unsafe_allow_html=True)
 
 @st.cache_data(ttl=60)
@@ -138,12 +133,5 @@ if not data.empty:
             display_lotto_line(sim_nums, sim_strong, real_nums, real_strong)
             hits = len(set(sim_nums) & set(real_nums))
             st.write(f"פגיעות: {hits}")
-        
-        for p in st.session_state.prediction_history:
-            actual_row = data[data.iloc[:, 0].apply(safe_int) == p['id']]
-            if not actual_row.empty:
-                actual_nums = [safe_int(x) for x in actual_row.iloc[0, 1:7]]
-                hits = len(set(p['nums']) & set(actual_nums))
-                st.markdown(f'<div class="accuracy-card">הגרלה {p["id"]}: <b>{hits}</b> פגיעות</div>', unsafe_allow_html=True)
 else:
     st.error("הנתונים לא נטענו.")
