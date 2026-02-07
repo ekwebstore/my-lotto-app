@@ -11,7 +11,7 @@ st.set_page_config(page_title="Lotto Learning AI", page_icon="💰", layout="cen
 # עיצוב CSS
 st.markdown("""
     <style>
-    .stButton>button { width: 100%; border-radius: 25px; background-color: #0F9D58; color: white; height: 3em; font-weight: bold; }
+    .stButton>button { width: 100%; border-radius: 25px; background-color: #0F9D58; color: white; height: 3em; font-weight: bold; border: none; }
     .number-ball { display: inline-block; width: 40px; height: 40px; background-color: #f1f3f4; 
                    border-radius: 50%; text-align: center; line-height: 40px; margin: 5px; font-weight: bold; border: 1px solid #dadce0; }
     .status-box { padding: 20px; border-radius: 15px; background-color: #f8f9fa; margin-bottom: 20px; border-right: 5px solid #4285F4; }
@@ -42,37 +42,50 @@ st.write("מערכת לומדת המנתחת קובץ CSV שתעלה")
 uploaded_file = st.file_uploader("בחר או גרור קובץ CSV של היסטוריית הגרלות", type="csv")
 
 if uploaded_file is not None:
-    try:
-        data = pd.read_csv(uploaded_file)
-        
-        st.markdown('<div class="status-box">', unsafe_allow_html=True)
-        st.write(f"✅ הקובץ נטען בהצלחה!")
-        st.write(f"הגרלות במאגר: **{len(data)}**")
-        st.markdown('</div>', unsafe_allow_html=True)
+    data = None
+    # ניסיון קריאה עם קידודים שונים כדי לפתור את שגיאת ה-UTF-8
+    encodings = ['utf-8', 'windows-1255', 'iso-8859-8', 'latin1']
+    
+    for enc in encodings:
+        try:
+            uploaded_file.seek(0) # חזרה לתחילת הקובץ בכל ניסיון
+            data = pd.read_csv(uploaded_file, encoding=enc)
+            break # אם הצלחנו לקרוא, יוצאים מהלולאה
+        except:
+            continue
 
-        if st.button("בצע חיזוי מבוסס למידה"):
-            numbers, strong, trend = generate_ai_prediction(data)
-            
-            st.subheader("התחזית האופטימלית:")
-            cols = st.columns(7)
-            for i, n in enumerate(numbers):
-                cols[i].markdown(f'<div class="number-ball">{n}</div>', unsafe_allow_html=True)
-            cols[6].markdown(f'<div class="number-ball" style="background-color:#FBBC05">{strong}</div>', unsafe_allow_html=True)
-            
-            st.info(f"המערכת זיהתה מגמת **{trend}**.")
+    if data is not None:
+        try:
+            st.markdown('<div class="status-box">', unsafe_allow_html=True)
+            st.write(f"✅ הקובץ נטען בהצלחה! (קידוד: {enc})")
+            st.write(f"הגרלות במאגר: **{len(data)}**")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # ויזואליזציה
-        st.markdown("---")
-        st.subheader("גרף דיוק אסטרטגיות")
-        learning_data = pd.DataFrame({
-            'הגרלות': list(range(1, 11)),
-            'דיוק חם': np.random.uniform(0.1, 0.4, 10),
-            'דיוק קר': np.random.uniform(0.1, 0.4, 10)
-        })
-        st.plotly_chart(px.line(learning_data, x='הגרלות', y=['דיוק חם', 'דיוק קר']))
+            if st.button("בצע חיזוי מבוסס למידה"):
+                numbers, strong, trend = generate_ai_prediction(data)
+                
+                st.subheader("התחזית האופטימלית:")
+                cols = st.columns(7)
+                for i, n in enumerate(numbers):
+                    cols[i].markdown(f'<div class="number-ball">{n}</div>', unsafe_allow_html=True)
+                cols[6].markdown(f'<div class="number-ball" style="background-color:#FBBC05">{strong}</div>', unsafe_allow_html=True)
+                
+                st.info(f"המערכת זיהתה מגמת **{trend}**.")
 
-    except Exception as e:
-        st.error(f"שגיאה בקריאת הקובץ: {e}")
+            # ויזואליזציה
+            st.markdown("---")
+            st.subheader("גרף דיוק אסטרטגיות")
+            learning_data = pd.DataFrame({
+                'הגרלות': list(range(1, 11)),
+                'דיוק חם': np.random.uniform(0.1, 0.4, 10),
+                'דיוק קר': np.random.uniform(0.1, 0.4, 10)
+            })
+            st.plotly_chart(px.line(learning_data, x='הגרלות', y=['דיוק חם', 'דיוק קר']))
+
+        except Exception as e:
+            st.error(f"שגיאה בעיבוד הנתונים: {e}")
+    else:
+        st.error("לא הצלחנו לקרוא את הקובץ. וודא שזהו קובץ CSV תקין המכיל נתונים.")
 else:
     st.info("אנא העלה קובץ CSV כדי להתחיל.")
 
