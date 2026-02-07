@@ -80,7 +80,7 @@ def generate_gold_prediction(df):
 tab1, tab2, tab3 = st.tabs(["🔮 חיזוי חדש", "📜 היסטוריית חיזויים", "✅ דיוק למידה"])
 
 # טעינת נתונים ראשונית
-history_df, _ = get_github_file("lotto_data.csv")
+history_df, _ = get_github_file("lotto_history.csv")
 predictions_df, pred_sha = get_github_file("predictions.csv")
 
 with tab1:
