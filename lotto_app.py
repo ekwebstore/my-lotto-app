@@ -4,138 +4,121 @@ import numpy as np
 import requests
 import io
 import random
-import base64
 from datetime import datetime
 
 # 1. הגדרות עמוד ואייקון (💰)
-st.set_page_config(page_title="Lotto AI Gold", page_icon="💰", layout="centered")
+st.set_page_config(page_title="Lotto AI Pro", page_icon="💰", layout="centered")
 
-# עיצוב CSS - כדורים, כרטיסיות וכפתורים
+# עיצוב CSS - כדורים, כרטיסיות וצבעים
 st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 25px; background-color: #0F9D58; color: white; height: 3.5em; font-weight: bold; border: none; }
     .number-ball { display: inline-block; width: 38px; height: 38px; background-color: #f8f9fa; border-radius: 50%; text-align: center; line-height: 38px; margin: 4px; font-weight: bold; border: 2px solid #4285F4; color: #202124; }
     .green-ball { background-color: #34A853 !important; color: white !important; border-color: #188038 !important; }
     .strong-ball { background-color: #FBBC05; border-color: #EA4335; }
-    .prediction-card { padding: 15px; border-radius: 12px; border: 1px solid #dadce0; margin-bottom: 10px; background-color: #ffffff; }
+    .history-card { padding: 15px; border-radius: 12px; border: 1px solid #dadce0; margin-bottom: 10px; background-color: #ffffff; direction: rtl; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- פונקציות גישה ל-GitHub ---
-def get_github_file(file_path):
+# --- פונקציית משיכת נתונים מגיטהאב ציבורי ---
+@st.cache_data(ttl=600)
+def fetch_github_csv(file_name):
+    # כאן עליך להחליף ליוזר ולשם ה-Repo שלך
+    USER = "YOUR_USERNAME" 
+    REPO = "YOUR_REPO_NAME"
+    url = f"https://raw.githubusercontent.com/{USER}/{REPO}/main/{file_name}"
+    
     try:
-        token = st.secrets["GITHUB_TOKEN"]
-        repo = st.secrets["GITHUB_REPO"]
-        url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
-        headers = {"Authorization": f"token {token}"}
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            content = base64.b64decode(res.json()['content']).decode('utf-8')
-            return pd.read_csv(io.StringIO(content)), res.json()['sha']
-        return pd.DataFrame(), None
+        response = requests.get(url)
+        if response.status_code == 200:
+            return pd.read_csv(io.StringIO(response.content))
+        else:
+            return pd.DataFrame()
     except:
-        return pd.DataFrame(), None
+        return pd.DataFrame()
 
-def save_github_file(file_path, df, sha):
-    try:
-        token = st.secrets["GITHUB_TOKEN"]
-        repo = st.secrets["GITHUB_REPO"]
-        url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
-        headers = {"Authorization": f"token {token}"}
-        content = base64.b64encode(df.to_csv(index=False).encode()).decode()
-        data = {"message": f"Update {file_path}", "content": content, "branch": "main", "sha": sha}
-        requests.put(url, headers=headers, json=data)
-    except:
-        st.error("שגיאה בסנכרון ל-GitHub")
-
-# --- מנגנון החיזוי - חוקי הזהב ---
+# --- מנגנון החיזוי - חוקי הזהב (סכום, מרחק, זוגיות) ---
 def generate_gold_prediction(df):
-    # ניתוח חמים/קרים
     all_draws = df.iloc[:, 1:7].values.flatten()
     counts = pd.Series(all_draws).value_counts()
     hot = counts.head(12).index.tolist()
     cold = [n for n in range(1, 38) if n not in hot]
     
-    # טרנד למידה (מבוסס 10 הגרלות אחרונות)
     trend = "HOT" if random.random() > 0.4 else "COLD"
     
-    for _ in range(100): # ניסיונות לייצור צירוף שעומד בחוקים
+    for _ in range(200): # ניסיונות לייצור צירוף שעומד בחוקים
         pool = random.sample(hot, 4) + random.sample(cold, 2) if trend == "HOT" else random.sample(hot, 2) + random.sample(cold, 4)
         nums = sorted(list(set(pool)))
         if len(nums) < 6: continue
         
-        # 1. חוק הסכום (90-155)
-        if not (90 <= sum(nums) <= 155): continue
-        # 2. חוק המרחק (ללא רצפים מעל 2)
+        # חוקי הזהב
+        if not (90 <= sum(nums) <= 155): continue # חוק הסכום
         diffs = np.diff(nums)
-        if any(diffs == 1) and list(diffs).count(1) > 1: continue
-        # 3. איזון זוגי/אי-זוגי (לפחות 2 מכל סוג)
+        if any(diffs == 1) and list(diffs).count(1) > 1: continue # חוק המרחק
         evens = len([n for n in nums if n % 2 == 0])
-        if evens < 2 or evens > 4: continue
+        if evens < 2 or evens > 4: continue # חוק האיזון
         
         return nums, random.randint(1, 7), trend
     return sorted(random.sample(range(1, 38), 6)), 1, "RANDOM"
 
-# --- ממשק משתמש בטאבים ---
-tab1, tab2, tab3 = st.tabs(["🔮 חיזוי חדש", "📜 היסטוריית חיזויים", "✅ דיוק למידה"])
+# --- ממשק המשתמש ---
+st.title("💰 Lotto AI Predictor")
 
-# טעינת נתונים ראשונית
-history_df, _ = get_github_file("lotto_data.csv")
-predictions_df, pred_sha = get_github_file("predictions.csv")
+# טעינת נתונים (שימוש בשם הקובץ שביקשת)
+data = fetch_github_csv("lotto_data.csv")
 
-with tab1:
-    st.title("מערכת חיזוי זהב")
-    if not history_df.empty:
-        next_lottery_num = int(history_df.iloc[0, 0]) + 1
-        st.write(f"חיזוי להגרלה מספר: **{next_lottery_num}**")
-        
-        if st.button("ייצר חיזוי חכם (חוקי הזהב)"):
-            nums, strong, trend = generate_gold_prediction(history_df)
+if not data.empty:
+    tab1, tab2, tab3 = st.tabs(["🔮 חיזוי חדש", "📜 היסטוריית הגרלות", "✅ דיוק למידה"])
+
+    with tab1:
+        st.subheader("חיזוי מבוסס חוקי הזהב")
+        if st.button("ייצר חיזוי להגרלה הבאה"):
+            nums, strong, trend = generate_gold_prediction(data)
             
-            # תצוגה
+            st.write(f"מגמה זוהתה: **{trend}**")
             cols = st.columns(7)
-            for i, n in enumerate(nums): cols[i].markdown(f'<div class="number-ball">{n}</div>', unsafe_allow_html=True)
+            for i, n in enumerate(nums):
+                cols[i].markdown(f'<div class="number-ball">{n}</div>', unsafe_allow_html=True)
             cols[6].markdown(f'<div class="number-ball strong-ball">{strong}</div>', unsafe_allow_html=True)
+            st.balloons()
             
-            # שמירה ל-GitHub
-            new_pred = pd.DataFrame([[datetime.now().strftime("%d/%m/%Y"), next_lottery_num, str(nums), strong, trend]], 
-                                    columns=['date', 'lottery_id', 'numbers', 'strong', 'trend'])
-            predictions_df = pd.concat([new_pred, predictions_df]).head(50)
-            save_github_file("predictions.csv", predictions_df, pred_sha)
-            st.success("החיזוי נשמר בהיסטוריה!")
-    else:
-        st.error("לא נמצא קובץ נתונים ב-GitHub")
+            # הערה: ללא Token, החיזוי יוצג אך לא יישמר בגיטהאב אוטומטית
 
-with tab2:
-    st.subheader("📜 כל פעולות החיזוי")
-    if not predictions_df.empty:
-        for _, row in predictions_df.iterrows():
-            st.markdown(f"""<div class="prediction-card">
-                <strong>תאריך:</strong> {row['date']} | <strong>הגרלה:</strong> {row['lottery_id']}<br>
-                מספרים: {row['numbers']} | חזק: {row['strong']} | טרנד: {row['trend']}
-            </div>""", unsafe_allow_html=True)
+    with tab2:
+        st.subheader("הגרלות אחרונות מהקובץ")
+        for i in range(min(10, len(data))):
+            row = data.iloc[i]
+            # הנחת מבנה: עמודה 0=תאריך/ID, 1-6=מספרים, 7=חזק
+            st.markdown(f"""
+            <div class="history-card">
+                <strong>הגרלה: {row[0]}</strong><br>
+                {row[1]}, {row[2]}, {row[3]}, {row[4]}, {row[5]}, {row[6]} | <b>חזק: {row[7]}</b>
+            </div>
+            """, unsafe_allow_html=True)
 
-with tab3:
-    st.subheader("✅ בדיקת דיוק (ירוק = פגיעה)")
-    if not predictions_df.empty and not history_df.empty:
-        for _, pred in predictions_df.iterrows():
-            # מציאת תוצאת האמת להגרלה המיועדת
-            actual = history_df[history_df.iloc[:, 0] == pred['lottery_id']]
-            if not actual.empty:
-                actual_nums = actual.iloc[0, 1:7].astype(int).tolist()
-                actual_strong = int(actual.iloc[0, 7])
-                pred_nums_list = eval(pred['numbers'])
-                
-                st.write(f"הגרלה {pred['lottery_id']}:")
-                cols = st.columns(7)
-                for i, p_n in enumerate(pred_nums_list):
-                    is_hit = "green-ball" if p_n in actual_nums else ""
-                    cols[i].markdown(f'<div class="number-ball {is_hit}">{p_n}</div>', unsafe_allow_html=True)
-                
-                s_hit = "green-ball" if pred['strong'] == actual_strong else ""
-                cols[6].markdown(f'<div class="number-ball strong-ball {s_hit}">{pred["strong"]}</div>', unsafe_allow_html=True)
-                st.markdown("---")
-            else:
-                st.write(f"הגרלה {pred['lottery_id']}: טרם פורסמו תוצאות אמת.")
+    with tab3:
+        st.subheader("בדיקת דיוק רטרואקטיבית")
+        st.write("בדיקה: לו היינו מנבאים את ההגרלה האחרונה (Backtest):")
+        
+        # לוקחים את כל הנתונים חוץ מההגרלה הכי חדשה ומנבאים אותה
+        test_data = data.iloc[1:]
+        actual_row = data.iloc[0]
+        actual_nums = [int(actual_row[i]) for i in range(1, 7)]
+        actual_strong = int(actual_row[7])
+        
+        sim_nums, sim_strong, _ = generate_gold_prediction(test_data)
+        
+        cols = st.columns(7)
+        for i, sn in enumerate(sim_nums):
+            is_hit = "green-ball" if sn in actual_nums else ""
+            cols[i].markdown(f'<div class="number-ball {is_hit}">{sn}</div>', unsafe_allow_html=True)
+        
+        is_s_hit = "green-ball" if sim_strong == actual_strong else ""
+        cols[6].markdown(f'<div class="number-ball strong-ball {is_s_hit}">{sim_strong}</div>', unsafe_allow_html=True)
+        
+        st.caption("מספרים בירוק = פגיעה בחיזוי הסימולציה")
 
-st.caption("מערכת למידה אוטונומית - מבוססת חוקי הזהב")
+else:
+    st.error("שגיאה: לא הצלחתי למשוך את הקובץ lotto_data.csv מגיטהאב. וודא שה-URL תקין והמאגר ציבורי.")
+
+st.caption(f"עודכן לאחרונה: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
