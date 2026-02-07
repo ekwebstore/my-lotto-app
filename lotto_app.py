@@ -80,11 +80,11 @@ def generate_gold_prediction(df):
 tab1, tab2, tab3 = st.tabs(["🔮 חיזוי חדש", "📜 היסטוריית חיזויים", "✅ דיוק למידה"])
 
 # טעינת נתונים ראשונית
-history_df, _ = get_github_file("lotto_history.csv")
+history_df, _ = get_github_file("lotto_data.csv")
 predictions_df, pred_sha = get_github_file("predictions.csv")
 
 with tab1:
-    st.title("🔮 חיזוי זהב")
+    st.title("מערכת חיזוי זהב")
     if not history_df.empty:
         next_lottery_num = int(history_df.iloc[0, 0]) + 1
         st.write(f"חיזוי להגרלה מספר: **{next_lottery_num}**")
