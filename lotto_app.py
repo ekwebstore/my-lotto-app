@@ -2,116 +2,131 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import random
-import plotly.express as px
 import os
 from datetime import datetime
 
-# --- הגדרות דף ועיצוב ---
-st.set_page_config(page_title="Lotto AI - Precise Edition", page_icon="🎯", layout="centered")
+# --- הגדרות דף ---
+st.set_page_config(page_title="Lotto AI Master", page_icon="🎯", layout="centered")
 
+# עיצוב CSS נקי ומותאם לנייד
 st.markdown("""
     <style>
-    .status-light { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-left: 8px; }
-    .light-green { background-color: #00C851; box-shadow: 0 0 10px #00C851; }
-    .status-card { background-color: #f8f9fa; padding: 12px; border-radius: 10px; border: 1px solid #dee2e6; font-size: 0.9em; }
-    .number-ball { display: inline-block; width: 42px; height: 42px; background-color: #fff; 
-                   border-radius: 50%; text-align: center; line-height: 40px; margin: 4px; 
-                   font-weight: bold; border: 2px solid #4285F4; color: #4285F4; font-size: 1.1em; }
-    .strong-ball { background-color: #FBBC05; border-color: #f2ab26; color: #fff; }
+    .ball { display: inline-block; width: 42px; height: 42px; background-color: white; 
+            border-radius: 50%; text-align: center; line-height: 42px; margin: 4px; 
+            font-weight: bold; border: 2px solid #4285F4; font-size: 1.1em; color: #202124; }
+    .strong { border-color: #FBBC05; background-color: #FBBC05; color: white; }
+    .history-item { background-color: #f1f3f4; padding: 10px; border-radius: 8px; 
+                    margin-bottom: 5px; font-family: sans-serif; border-right: 4px solid #4285F4; }
+    .hot-tag { color: #d93025; font-weight: bold; }
+    .cold-tag { color: #1967d2; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- לוגיקה מדויקת ---
+# --- ניהול זיכרון היסטוריה ---
+if 'lotto_history' not in st.session_state:
+    st.session_state.lotto_history = []
 
-def perform_ai_learning(df):
-    """מנגנון למידה לאחור על בסיס נתונים קיימים"""
+# --- פונקציות ניתוח ---
+
+def analyze_lotto_data(df):
+    """מנתח את הקובץ ומוציא מספרים חמים וקרים באמת"""
     try:
-        # חילוץ המספרים מה-CSV (עמודות 2-7 בדרך כלל)
-        all_cols = df.iloc[:, 2:8] 
-        all_series = all_cols.values.flatten()
-        # סינון מספרים שחורגים מהטווח (למקרה של זבל ב-CSV)
-        valid_nums = [n for n in all_series if 1 <= n <= 37]
-        counts = pd.Series(valid_nums).value_counts()
+        # חילוץ המספרים (עמודות 2 עד 7 ב-CSV של הפיס)
+        raw_numbers = df.iloc[:, 2:8].values.flatten()
+        clean_nums = [int(n) for n in raw_numbers if 1 <= n <= 37]
+        counts = pd.Series(clean_nums).value_counts()
         
-        hot_nums = counts.index[:12].tolist()
-        cold_nums = counts.index[-12:].tolist()
-        return hot_nums, cold_nums, 92
+        hot = counts.index[:12].tolist()  # 12 הכי נפוצים
+        cold = counts.index[-12:].tolist() # 12 הכי נדירים
+        return hot, cold, counts
     except:
-        # ברירת מחדל בטווח תקין
-        return list(range(1, 13)), list(range(26, 38)), 85
+        return list(range(1, 13)), list(range(26, 38)), pd.Series()
 
-def extremity_test(nums):
-    """מבחן קיצוניות המבטיח שהמספרים בטווח 1-37 בלבד"""
-    if any(n < 1 or n > 37 for n in nums):
-        return False, 0, 0
-        
+def run_safety_check(nums):
+    """מבחן קיצוניות: סכום וזוגיות"""
     s = sum(nums)
     evens = len([n for n in nums if n % 2 == 0])
-    consecutive = 0
-    for i in range(len(nums)-1):
-        if nums[i+1] - nums[i] == 1: consecutive += 1
-    
-    # תנאי סף לצירוף "הגיוני"
-    is_safe = (90 <= s <= 155) and (2 <= evens <= 4) and (consecutive <= 1)
-    return is_safe, s, evens
+    # תנאים לצירוף מאוזן
+    return (90 <= s <= 155) and (2 <= evens <= 4), s
 
-# ניהול היסטוריה בזיכרון
-if 'history' not in st.session_state:
-    st.session_state.history = []
+# --- ממשק המשתמש ---
 
-# --- ממשק משתמש ---
-
-st.title("🎯 Lotto AI Precise")
-st.write("מערכת חיזוי מותאמת לטווח הלוטו הישראלי (1-37, חזק 1-7)")
+st.title("🎯 לוטו AI - חכם ומדויק")
 
 file_path = 'lotto_data.csv'
 
 if os.path.exists(file_path):
-    try:
-        df = pd.read_csv(file_path, encoding='cp1255')
-        hot, cold, l_score = perform_ai_learning(df)
+    df = pd.read_csv(file_path, encoding='cp1255')
+    hot_list, cold_list, full_counts = analyze_lotto_data(df)
+    
+    # תצוגת למידה מהירה
+    st.markdown("### 🔍 דוח למידה מהקובץ")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"🔥 <span class='hot-tag'>מספרים חמים:</span> {', '.join(map(str, hot_list[:6]))}", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"❄️ <span class='cold-tag'>מספרים קרים:</span> {', '.join(map(str, cold_list[:6]))}", unsafe_allow_html=True)
+
+    st.divider()
+
+    if st.button("🚀 ייצר צירוף חכם והוסף להיסטוריה"):
+        found = False
+        attempts = 0
+        while not found and attempts < 1000:
+            # אסטרטגיה: שילוב של חמים, קרים ואקראיים בטווח 1-37
+            pick = random.sample(hot_list, 2) + random.sample(cold_list, 2) + random.sample(range(1, 38), 2)
+            pick = sorted(list(set(pick)))
+            if len(pick) == 6:
+                safe, total_sum = run_safety_check(pick)
+                if safe:
+                    found = True
+                    final_nums = pick
+            attempts += 1
         
-        # תצוגת רמזורים
-        c1, c2, c3 = st.columns(3)
-        with c1: st.markdown('<div class="status-card"><span class="status-light light-green"></span>למידה פעילה</div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="status-card"><span class="status-light light-green"></span>טווח 1-37 נעול</div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="status-card"><span class="status-light light-green"></span>חזק 1-7 נעול</div>', unsafe_allow_html=True)
+        strong_num = random.randint(1, 7)
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # שמירה להיסטוריה
+        st.session_state.lotto_history.append({
+            "time": timestamp,
+            "nums": final_nums,
+            "strong": strong_num
+        })
+        
+        # תצוגת התוצאה הנוכחית
+        st.markdown("### הניחוש המומלץ:")
+        res_html = "<div style='text-align: center;'>"
+        for n in final_nums:
+            res_html += f'<div class="ball">{n}</div>'
+        res_html += f'<div class="ball strong">{strong_num}</div>'
+        res_html += "</div>"
+        st.markdown(res_html, unsafe_allow_html=True)
+        st.caption(f"הצירוף עבר מבחן קיצוניות (סכום: {total_sum})")
 
-        if st.button("🚀 הפק תחזית מדויקת"):
-            attempts = 0
-            while attempts < 300:
-                # הגרלה מתוך הטווח החוקי בלבד (1-37)
-                pool = random.sample(hot, 2) + random.sample(cold, 2) + random.sample(range(1, 38), 2)
-                candidate = sorted(list(set(pool)))
-                if len(candidate) == 6:
-                    is_safe, s, evens = extremity_test(candidate)
-                    if is_safe:
-                        nums = candidate
-                        break
-                attempts += 1
-            
-            # מספר חזק בטווח 1-7
-            strong = random.randint(1, 7)
-            
-            # תצוגת תוצאות
-            st.subheader("הצירוף המומלץ:")
-            res_cols = st.columns(7)
-            for i, n in enumerate(nums):
-                res_cols[i].markdown(f'<div class="number-ball">{n}</div>', unsafe_allow_html=True)
-            res_cols[6].markdown(f'<div class="number-ball strong-ball">{strong}</div>', unsafe_allow_html=True)
-            
-            st.success(f"בוצע סינון קיצוניות. {attempts} צירופים נבדקו עד למציאת הצירוף האידיאלי.")
-            st.session_state.history.append({"time": datetime.now().strftime("%H:%M:%S"), "nums": nums, "strong": strong})
+    # --- טאבים למידע נוסף ---
+    tab1, tab2 = st.tabs(["📜 היסטוריית תחזיות", "📊 מפת חום מלאה"])
+    
+    with tab1:
+        if st.session_state.lotto_history:
+            for item in reversed(st.session_state.lotto_history):
+                nums_str = ", ".join(map(str, item['nums']))
+                st.markdown(f"""
+                <div class="history-item">
+                    <b>{item['time']}</b> | {nums_str} | <span style="color:#f2ab26">חזק: {item['strong']}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.write("עדיין לא נוצרו תחזיות.")
 
-        # טאבים למידע נוסף
-        t1, t2 = st.tabs(["📊 סטטיסטיקה", "📜 היסטוריה"])
-        with t1:
-            st.line_chart(pd.DataFrame({'דיוק': np.random.normal(l_score, 1, 15)}))
-        with t2:
-            for item in reversed(st.session_state.history):
-                st.write(f"[{item['time']}] {item['nums']} | חזק: {item['strong']}")
+    with tab2:
+        st.write("שכיחות הופעת מספרים (1-37):")
+        if not full_counts.empty:
+            # סידור הגרף לפי סדר המספרים 1-37
+            freq_data = full_counts.reindex(range(1, 38), fill_value=0)
+            st.bar_chart(freq_data)
+        else:
+            st.write("אין מספיק נתונים להצגת גרף.")
 
-    except Exception as e:
-        st.error(f"שגיאה בקובץ: {e}")
 else:
-    st.info("אנא העלה את קובץ ה-lotto_data.csv כדי להתחיל.")
+    st.error("לא נמצא קובץ נתונים!")
+    st.info("אנא העלה קובץ בשם lotto_data.csv לתיקיית ה-GitHub שלך.")
